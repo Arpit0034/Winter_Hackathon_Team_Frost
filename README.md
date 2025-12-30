@@ -2,7 +2,7 @@
 **Blockchain-based Government Recruitment System**
 
 ## Theme
-Blockchain / AI  
+Web3/Blockchain  
 
 ## Hackathon
 Winter Hackathon – GEHU Bhimtal  
