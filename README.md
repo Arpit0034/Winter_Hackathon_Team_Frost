@@ -27,6 +27,13 @@ Once exams are conducted, candidates have no reliable way to verify whether resu
 Instead of trusting manual records, **every critical action is hashed and stored on the blockchain**, making it impossible to secretly change data later.
 
 ---
+## Live Demo
+🌐 https://blockchain-job.netlify.app/
+- admin :: 
+-  username -> Arpit 
+-  password -> arpit1
+---
+
 ## DFD 
 <img width="2024" height="2186" alt="diagram-export-30-12-2025-14_40_05" src="https://github.com/user-attachments/assets/012a34bd-c9c8-4d4d-9877-6a7f84ce535a" />
 
@@ -183,7 +190,7 @@ Key tables:
 ##  Round 2 
 - Full smart contract depoly and integrate to our app
 - Fixed OMR scanning  
-- Deployment of backend , db on render and frontend on netlify 
+- Deployment of enhanced version of this app
 ---
 
 > **JobChain replaces trust in authority with trust in cryptography.**
