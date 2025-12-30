@@ -29,7 +29,7 @@ Instead of trusting manual records, **every critical action is hashed and stored
 ---
 ## Live Demo
 🌐 https://blockchain-job.netlify.app/
-- admin :: username -> Arpit , password -> arpit1
+- admin :: username -> Arpit , password -> arpit2024
 - it is bit slow due to render deployment
 ---
 
