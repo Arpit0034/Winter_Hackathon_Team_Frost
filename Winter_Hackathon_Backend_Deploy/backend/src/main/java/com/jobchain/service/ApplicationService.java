@@ -2,8 +2,11 @@ package com.jobchain.service;
 
 import com.jobchain.dto.CreateApplicationRequest;
 import com.jobchain.entity.ApplicationEntity;
+import com.jobchain.entity.VacancyEntity;
 import com.jobchain.repository.ApplicationRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jobchain.repository.ExamScoreRepository;
+import com.jobchain.repository.VacancyRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -19,7 +22,13 @@ import java.util.*;
 public class ApplicationService {
 
     @Autowired
+    private VacancyRepository vacancyRepository;
+
+    @Autowired
     private ApplicationRepository applicationRepository;
+
+    @Autowired
+    private ExamScoreRepository examScoreRepository;
 
     @Autowired
     private BlockchainService blockchainService;
@@ -31,18 +40,14 @@ public class ApplicationService {
             log.info("Submitting application for vacancy: {}, candidate: {}",
                     request.getVacancyId(), request.getCandidateName());
 
-            // Validation
+            // Validation...
             if (request.getVacancyId() == null) {
                 throw new IllegalArgumentException("Vacancy ID cannot be null");
             }
             if (request.getCandidateName() == null || request.getCandidateName().trim().isEmpty()) {
                 throw new IllegalArgumentException("Candidate name cannot be empty");
             }
-            if (request.getMarks10() <= 0 || request.getMarks12() <= 0) {
-                throw new IllegalArgumentException("Marks must be positive");
-            }
 
-            // Create application JSON
             Map<String, Object> appData = new HashMap<>();
             appData.put("candidateName", request.getCandidateName());
             appData.put("email", request.getEmail());
@@ -52,14 +57,16 @@ public class ApplicationService {
             appData.put("timestamp", new Date().toString());
 
             String appJson = objectMapper.writeValueAsString(appData);
-
-            // Calculate application hash
             String appHash = sha256(appJson);
 
-            // Record on blockchain
-            String txHash = blockchainService.logApplicationOnChain(request.getVacancyId(), appHash);
+            VacancyEntity vacancy = vacancyRepository.findById(request.getVacancyId())
+                    .orElseThrow(() -> new RuntimeException("Vacancy not found"));
 
-            // Save to database
+            String txHash = blockchainService.logApplicationOnChain(
+                    vacancy.getBlockchainVacancyId(),
+                    appHash
+            );
+
             ApplicationEntity application = ApplicationEntity.builder()
                     .vacancyId(request.getVacancyId())
                     .candidateName(request.getCandidateName())
@@ -85,9 +92,52 @@ public class ApplicationService {
         }
     }
 
-    public List<ApplicationEntity> getApplicationsByVacancy(UUID vacancyId) {
+    // Use this method for getting applications with only non-LOB fields
+    public List<Object[]> getApplicationsByVacancyWithoutLob(UUID vacancyId) {
         try {
             log.info("Fetching applications for vacancy: {}", vacancyId);
+            List<Object[]> applications = applicationRepository.findApplicationsByVacancyIdWithoutLob(vacancyId);
+            log.info("Retrieved {} applications", applications.size());
+            return applications;
+        } catch (Exception e) {
+            log.error("Failed to fetch applications: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to retrieve applications", e);
+        }
+    }
+
+    // NEW: Get applications as a map for quick lookup
+    public Map<String, Map<String, String>> getApplicationsMapByVacancy(UUID vacancyId) {
+        try {
+            log.info("Fetching applications map for vacancy: {}", vacancyId);
+            List<Object[]> applicationData = applicationRepository.findApplicationsByVacancyIdWithoutLob(vacancyId);
+            Map<String, Map<String, String>> appMap = new HashMap<>();
+
+            for (Object[] row : applicationData) {
+                if (row.length < 10) continue;
+
+                UUID appId = (UUID) row[0];
+                String candidateName = (String) row[2];
+                String category = (String) row[4];
+
+                Map<String, String> appInfo = new HashMap<>();
+                appInfo.put("candidateName", candidateName);
+                appInfo.put("category", category);
+                appMap.put(appId.toString(), appInfo);
+            }
+
+            log.info("Created application map with {} entries", appMap.size());
+            return appMap;
+        } catch (Exception e) {
+            log.error("Failed to fetch applications map: {}", e.getMessage());
+            throw new RuntimeException("Failed to retrieve applications map", e);
+        }
+    }
+
+    // Use this only when you need the full entity with LOB fields
+    @Transactional(readOnly = true)
+    public List<ApplicationEntity> getApplicationsByVacancyWithLob(UUID vacancyId) {
+        try {
+            log.info("Fetching full applications for vacancy: {}", vacancyId);
             List<ApplicationEntity> applications = applicationRepository.findByVacancyId(vacancyId);
             log.info("Retrieved {} applications", applications.size());
             return applications;
@@ -118,7 +168,7 @@ public class ApplicationService {
             log.info("Updating application status: id={}, status={}", applicationId, status);
 
             Optional<ApplicationEntity> applicationOpt = applicationRepository.findById(applicationId);
-            if (!applicationOpt.isPresent()) {
+            if (applicationOpt.isEmpty()) {
                 throw new IllegalArgumentException("Application not found: " + applicationId);
             }
 
@@ -139,17 +189,13 @@ public class ApplicationService {
             log.info("Verifying application integrity: {}", applicationId);
 
             Optional<ApplicationEntity> applicationOpt = applicationRepository.findById(applicationId);
-            if (!applicationOpt.isPresent()) {
+            if (applicationOpt.isEmpty()) {
                 log.warn("Application not found for verification");
                 return false;
             }
 
             ApplicationEntity application = applicationOpt.get();
-
-            // Recalculate hash from current application JSON
             String recalculatedHash = sha256(application.getAppJson());
-
-            // Compare with stored hash
             boolean isValid = recalculatedHash.equals(application.getAppHash());
 
             if (isValid) {

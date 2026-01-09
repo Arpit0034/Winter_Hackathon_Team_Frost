@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.web3j.protocol.core.methods.response.TransactionReceipt;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,42 +23,29 @@ public class VacancyService {
     @Autowired
     private BlockchainService blockchainService;
 
-    public VacancyEntity createVacancy(String title, int totalPosts, String paperHash) {
-        try {
-            log.info("Creating vacancy: title={}, totalPosts={}", title, totalPosts);
+    public VacancyEntity createVacancy(String title, int totalPosts, String paperHash) throws Exception {
 
-            // Validation
-            if (title == null || title.trim().isEmpty()) {
-                throw new IllegalArgumentException("Vacancy title cannot be empty");
-            }
-            if (totalPosts <= 0) {
-                throw new IllegalArgumentException("Total posts must be greater than 0");
-            }
-            if (paperHash == null || paperHash.length() != 64) {
-                throw new IllegalArgumentException("Invalid paper hash format");
-            }
+        TransactionReceipt receipt =
+                blockchainService.createVacancyAndReturnReceipt(
+                        title,
+                        totalPosts,
+                        paperHash
+                );
 
-            // Record vacancy on blockchain first
-            String txHash = blockchainService.createVacancyOnChain(title, totalPosts, paperHash);
+        Long blockchainVacancyId =
+                blockchainService.extractVacancyId(receipt);
 
-            // Create entity and save to database
-            VacancyEntity vacancy = VacancyEntity.builder()
-                    .title(title)
-                    .totalPosts(totalPosts)
-                    .paperHash(paperHash)
-                    .blockchainTxHash(txHash)
-                    .build();
+        VacancyEntity vacancy = VacancyEntity.builder()
+                .blockchainVacancyId(blockchainVacancyId)
+                .title(title)
+                .totalPosts(totalPosts)
+                .paperHash(paperHash)
+                .blockchainTxHash(receipt.getTransactionHash())
+                .build();
 
-            VacancyEntity savedVacancy = vacancyRepository.save(vacancy);
-            log.info("Vacancy created successfully: id={}, txHash={}", savedVacancy.getId(), txHash);
-
-            return savedVacancy;
-
-        } catch (Exception e) {
-            log.error("Failed to create vacancy: {}", e.getMessage());
-            throw new RuntimeException("Vacancy creation failed", e);
-        }
+        return vacancyRepository.save(vacancy);
     }
+
 
     public List<VacancyEntity> getAllVacancies() {
         try {

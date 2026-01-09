@@ -1,5 +1,8 @@
 package com.jobchain.service;
 
+import com.jobchain.dto.ExamPaperResponse;
+import com.jobchain.dto.OmrSubmitRequest;
+import com.jobchain.dto.QuestionDto;
 import com.jobchain.entity.*;
 import com.jobchain.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -17,6 +21,9 @@ import java.util.stream.Collectors;
 @Slf4j
 @Transactional
 public class ExamService {
+
+    @Autowired
+    private VacancyRepository vacancyRepository ;
 
     @Autowired
     private ExamScoreRepository examScoreRepository;
@@ -28,6 +35,9 @@ public class ExamService {
     private ApplicationRepository applicationRepository;
 
     @Autowired
+    private OMRRecordRepository omrRecordRepository ;
+
+    @Autowired
     private BlockchainService blockchainService;
 
     @Autowired
@@ -35,33 +45,62 @@ public class ExamService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public ExamScoreEntity recordExamScore(UUID vacancyId, UUID applicationId, double marks, String markingJson) {
-        try {
-            log.info("Recording exam score: vacancyId={}, applicationId={}, marks={}", vacancyId, applicationId, marks);
+    @Transactional
+    public ExamScoreEntity recordExamScore(
+            UUID vacancyId,
+            UUID applicationId,
+            double marks,
+            String markingJson
+    ) throws Exception {
 
-            // Validation
-            if (marks < 0 || marks > 100) {
-                throw new IllegalArgumentException("Marks must be between 0 and 100");
-            }
+        log.info("Recording exam score for application: {}, marks: {}", applicationId, marks);
 
-            // Verify application exists
-            Optional<ApplicationEntity> application = applicationRepository.findById(applicationId);
-            if (!application.isPresent()) {
-                throw new IllegalArgumentException("Application not found: " + applicationId);
-            }
+        // Check if marks already recorded
+        Optional<ExamScoreEntity> existingScore = examScoreRepository.findByApplicationId(applicationId);
 
-            if (markingJson == null || markingJson.trim().isEmpty()) {
-                throw new IllegalArgumentException("markingJson is mandatory to record exam score");
-            }
+        // If exists AND has blockchainTxHash, don't allow update
+        if (existingScore.isPresent() && existingScore.get().getBlockchainTxHash() != null) {
+            throw new IllegalStateException(
+                    "Marks already recorded on blockchain for application: " + applicationId
+            );
+        }
 
-            // Calculate hash of marking JSON
-            String markingHash = sha256(markingJson);
+        if (marks < 0 || marks > 100) {
+            throw new IllegalArgumentException("Marks must be between 0 and 100");
+        }
 
-            // Record on blockchain
-            String txHash = blockchainService.recordExamScoreOnChain(vacancyId, (int) marks, markingHash);
+        ApplicationEntity app = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
 
-            // Save to database
-            ExamScoreEntity examScore = ExamScoreEntity.builder()
+        VacancyEntity vacancy = vacancyRepository.findById(vacancyId)
+                .orElseThrow(() -> new RuntimeException("Vacancy not found"));
+
+        if (markingJson == null || markingJson.isBlank()) {
+            markingJson = "{\"type\":\"MANUAL_ADMIN\",\"timestamp\":\"" +
+                    new Date().toString() + "\"}";
+        }
+
+        String markingHash = sha256(markingJson);
+
+        // Blockchain record - ADMIN can record marks without OMR verification
+        String txHash = blockchainService.recordExamScoreOnChain(
+                vacancy.getBlockchainVacancyId(),
+                (int) marks,
+                markingHash
+        );
+
+        ExamScoreEntity score;
+
+        if (existingScore.isPresent()) {
+            // Update existing score (without blockchainTxHash)
+            score = existingScore.get();
+            score.setMarks(marks);
+            score.setMarkingJson(markingJson);
+            score.setMarkingHash(markingHash);
+            score.setBlockchainTxHash(txHash);
+        } else {
+            // Create new score
+            score = ExamScoreEntity.builder()
                     .vacancyId(vacancyId)
                     .applicationId(applicationId)
                     .marks(marks)
@@ -69,16 +108,12 @@ public class ExamService {
                     .markingHash(markingHash)
                     .blockchainTxHash(txHash)
                     .build();
-
-            ExamScoreEntity savedScore = examScoreRepository.save(examScore);
-            log.info("Exam score recorded successfully: id={}, txHash={}", savedScore.getId(), txHash);
-
-            return savedScore;
-
-        } catch (Exception e) {
-            log.error("Failed to record exam score: {}", e.getMessage());
-            throw new RuntimeException("Exam score recording failed", e);
         }
+
+        log.info("Exam score recorded successfully. Application: {}, Marks: {}, TX: {}",
+                applicationId, marks, txHash);
+
+        return examScoreRepository.save(score);
     }
 
     public MeritListEntity publishMerit(UUID vacancyId) {
@@ -90,7 +125,6 @@ public class ExamService {
         try {
             log.info("Publishing merit list for vacancyId: {}", vacancyId);
 
-            // Fetch applications (optional validation)
             List<ApplicationEntity> applications =
                     applicationRepository.findByVacancyId(vacancyId);
 
@@ -99,7 +133,6 @@ public class ExamService {
                         "No applications found for vacancy: " + vacancyId);
             }
 
-            // ✅ FETCH ONLY REQUIRED DATA (NO LOB)
             List<Object[]> scoreRows =
                     examScoreRepository.findApplicationIdAndMarksByVacancyId(vacancyId);
 
@@ -108,7 +141,6 @@ public class ExamService {
                         "No exam scores found for vacancy: " + vacancyId);
             }
 
-            // Build merit list
             List<Map<String, Object>> meritData = scoreRows.stream()
                     .map(row -> {
                         UUID applicationId = (UUID) row[0];
@@ -126,26 +158,26 @@ public class ExamService {
                             ))
                     .collect(Collectors.toList());
 
-            // Assign ranks
             for (int i = 0; i < meritData.size(); i++) {
                 meritData.get(i).put("rank", i + 1);
             }
 
-            // Convert to JSON
             String meritJson = objectMapper.writeValueAsString(meritData);
-
-            // Hash merit list
             String meritHash = sha256(meritJson);
 
-            // Record on blockchain
-            String txHash =
-                    blockchainService.publishMeritOnChain(vacancyId, meritHash);
+            VacancyEntity vacancy =
+                    vacancyRepository.findById(vacancyId)
+                            .orElseThrow(() -> new IllegalArgumentException("Vacancy not found"));
 
-            // Run fraud detection (safe now)
+            String txHash =
+                    blockchainService.publishMeritOnChain(
+                            vacancy.getBlockchainVacancyId(),
+                            meritHash
+                    );
+
             fraudDetectionService.detectPaperLeak(vacancyId);
             fraudDetectionService.detectMarksAnomaly(vacancyId);
 
-            // Save to DB
             MeritListEntity meritList = MeritListEntity.builder()
                     .vacancyId(vacancyId)
                     .meritJson(meritJson)
@@ -190,7 +222,6 @@ public class ExamService {
         try {
             log.info("Verifying merit list integrity for vacancyId: {}", vacancyId);
 
-            // Fetch merit list from database
             Optional<MeritListEntity> meritListOpt = meritListRepository.findByVacancyId(vacancyId);
             if (!meritListOpt.isPresent()) {
                 log.warn("Merit list not found for verification");
@@ -198,11 +229,7 @@ public class ExamService {
             }
 
             MeritListEntity meritList = meritListOpt.get();
-
-            // Recalculate hash from current merit JSON
             String recalculatedHash = sha256(meritList.getMeritJson());
-
-            // Compare with stored hash
             boolean isValid = recalculatedHash.equals(meritList.getMeritHash());
 
             if (isValid) {
@@ -232,6 +259,52 @@ public class ExamService {
             return hexString.toString();
         } catch (Exception e) {
             throw new RuntimeException("Hash calculation failed", e);
+        }
+    }
+
+    public boolean isEligible(UUID applicationId) {
+        ApplicationEntity app = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+        return !app.isTestAttempted();
+    }
+
+    public ExamPaperResponse getPaper(UUID vacancyId) {
+        List<QuestionDto> questions = Collections.emptyList();
+        Map<String, String> markingScheme = Collections.emptyMap();
+        return new ExamPaperResponse(questions, markingScheme);
+    }
+
+    @Transactional
+    public void submitOmr(OmrSubmitRequest request) {
+        ApplicationEntity app = applicationRepository.findById(request.getApplicationId())
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+
+        if (app.isTestAttempted()) {
+            throw new RuntimeException("Test already attempted");
+        }
+
+        try {
+            String omrJson = objectMapper.writeValueAsString(request.getOmrAnswers());
+            String omrHash = sha256(omrJson);
+
+            OMRRecordEntity omr = OMRRecordEntity.builder()
+                    .candidateId(app.getId().toString())
+                    .vacancyId(app.getVacancyId())
+                    .omrJson(omrJson)
+                    .omrHash(omrHash)
+                    .qrCodeData("APP-" + app.getId())
+                    .scanTimestamp(LocalDateTime.now())
+                    .build();
+
+            omrRecordRepository.save(omr);
+
+            app.setTestAttempted(true);
+            app.setOmrAnswerJson(omrJson);
+            app.setAnswerHash(omrHash);
+            applicationRepository.save(app);
+
+        } catch (Exception e) {
+            throw new RuntimeException("OMR submission failed", e);
         }
     }
 }

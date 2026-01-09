@@ -2,8 +2,10 @@ package com.jobchain.service;
 
 import com.jobchain.entity.ExamScoreEntity;
 import com.jobchain.entity.FraudAlertEntity;
+import com.jobchain.entity.VacancyEntity;
 import com.jobchain.repository.ExamScoreRepository;
 import com.jobchain.repository.FraudAlertRepository;
+import com.jobchain.repository.VacancyRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -13,17 +15,12 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Service for detecting and managing fraud in recruitment process.
- * Implements algorithms to detect paper leaks, OMR tampering, and suspicious patterns.
- * All fraud incidents are recorded on blockchain for immutable audit trail.
- *
- * @author JobChain System
- * @version 1.0
- */
 @Service
 @Slf4j
 public class FraudDetectionService {
+
+    @Autowired
+    private VacancyRepository vacancyRepository;
 
     @Autowired
     private ExamScoreRepository examScoreRepository;
@@ -34,7 +31,7 @@ public class FraudDetectionService {
     @Autowired
     private BlockchainService blockchainService;
 
-    private static final int PAPER_LEAK_THRESHOLD = 500;
+    private static final int PAPER_LEAK_THRESHOLD = 10;
 
     public List<FraudAlertEntity> detectPaperLeak(UUID vacancyId) {
         try {
@@ -71,11 +68,17 @@ public class FraudDetectionService {
                             suspectCount);
 
                     // Blockchain proof (immutable)
-                    String txHash = blockchainService.detectPaperLeakOnChain(
-                            vacancyId,
-                            suspectCount,
-                            patternHash
-                    );
+                    VacancyEntity vacancy =
+                            vacancyRepository.findById(vacancyId)
+                                    .orElseThrow(() -> new IllegalArgumentException("Vacancy not found"));
+
+                    String txHash =
+                            blockchainService.detectPaperLeakOnChain(
+                                    vacancy.getBlockchainVacancyId(),
+                                    suspectCount,
+                                    patternHash
+                            );
+
 
                     FraudAlertEntity alert = FraudAlertEntity.builder()
                             .vacancyId(vacancyId)
@@ -129,7 +132,7 @@ public class FraudDetectionService {
 
         } catch (Exception e) {
             log.error("Failed to detect OMR tampering: {}", e.getMessage(), e);
-            return false; // Return false if verification fails
+            return false;
         }
     }
 
@@ -222,7 +225,6 @@ public class FraudDetectionService {
 
     private String generateEvidenceHash(List<ExamScoreEntity> suspects) {
         try {
-            // Concatenate all application IDs
             String evidence = suspects.stream()
                     .map(s -> s.getApplicationId().toString())
                     .sorted()
