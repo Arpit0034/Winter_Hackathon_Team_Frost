@@ -20,4 +20,6 @@ public class ApplicationResponse {
     private String status;
     private String blockchainTxHash;
     private LocalDateTime createdAt;
+    private Double marks;
+    private boolean testAttempted;
 }
