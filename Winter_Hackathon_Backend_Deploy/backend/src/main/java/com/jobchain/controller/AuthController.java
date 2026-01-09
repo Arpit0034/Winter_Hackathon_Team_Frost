@@ -31,18 +31,16 @@ public class AuthController {
     @PostMapping("/signup")
     public ResponseEntity<?> signup(@RequestBody SignupRequest request) {
 
-        // Check if username already exists
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
             return ResponseEntity
                     .badRequest()
                     .body(new SignupResponse("Username already exists"));
         }
 
-        // Create STUDENT user ONLY
         UserEntity user = UserEntity.builder()
                 .username(request.getUsername())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.STUDENT) // 🔒 FIXED ROLE
+                .role(Role.STUDENT)
                 .build();
 
         userRepository.save(user);

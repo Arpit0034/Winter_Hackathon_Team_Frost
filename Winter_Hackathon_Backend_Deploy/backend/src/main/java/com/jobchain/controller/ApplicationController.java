@@ -2,7 +2,8 @@ package com.jobchain.controller;
 
 import com.jobchain.dto.ApplicationResponse;
 import com.jobchain.dto.CreateApplicationRequest;
-import com.jobchain.entity.ApplicationEntity;
+import com.jobchain.entity.ExamScoreEntity;
+import com.jobchain.repository.ExamScoreRepository;
 import com.jobchain.service.ApplicationService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -12,9 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -25,6 +25,9 @@ public class ApplicationController {
     @Autowired
     private ApplicationService applicationService;
 
+    @Autowired
+    private ExamScoreRepository examScoreRepository;
+
     @PreAuthorize("hasAuthority('STUDENT')")
     @PostMapping
     public ResponseEntity<ApplicationResponse> submitApplication(
@@ -33,8 +36,8 @@ public class ApplicationController {
             log.info("POST /api/applications - Submitting application for vacancy: {}",
                     request.getVacancyId());
 
-            ApplicationEntity application = applicationService.submitApplication(request);
-            ApplicationResponse response = mapToResponse(application);
+            var application = applicationService.submitApplication(request);
+            var response = mapToResponse(application);
 
             log.info("Application submitted successfully: id={}", application.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -55,16 +58,57 @@ public class ApplicationController {
         try {
             log.info("GET /api/applications/vacancy/{} - Fetching applications", vacancyId);
 
-            List<ApplicationEntity> applications = applicationService.getApplicationsByVacancy(vacancyId);
-            List<ApplicationResponse> responses = applications.stream()
-                    .map(this::mapToResponse)
-                    .collect(Collectors.toList());
+            List<Object[]> applicationData = applicationService.getApplicationsByVacancyWithoutLob(vacancyId);
+            List<ApplicationResponse> responses = new ArrayList<>();
+
+            for (Object[] row : applicationData) {
+                if (row.length < 10) {
+                    log.error("Row length is {} but expected 10", row.length);
+                    continue;
+                }
+
+                UUID id = (UUID) row[0];
+                UUID vacancyIdFromRow = (UUID) row[1];
+                String candidateName = (String) row[2];
+                String email = (String) row[3];
+                String category = (String) row[4];
+                String appHash = (String) row[5];
+                String status = (String) row[6];
+                String blockchainTxHash = (String) row[7];
+                LocalDateTime createdAt = (LocalDateTime) row[8];
+                boolean testAttempted = (Boolean) row[9];
+
+                // Get marks from ExamScoreRepository
+                Double marks = null;
+                try {
+                    Optional<ExamScoreEntity> scoreOpt = examScoreRepository.findByApplicationId(id);
+                    marks = scoreOpt.map(ExamScoreEntity::getMarks).orElse(null);
+                } catch (Exception e) {
+                    log.warn("Could not fetch marks for application {}: {}", id, e.getMessage());
+                }
+
+                ApplicationResponse response = ApplicationResponse.builder()
+                        .id(id)
+                        .vacancyId(vacancyIdFromRow)
+                        .candidateName(candidateName)
+                        .email(email)
+                        .category(category)
+                        .appHash(appHash)
+                        .status(status)
+                        .blockchainTxHash(blockchainTxHash)
+                        .createdAt(createdAt)
+                        .testAttempted(testAttempted)
+                        .marks(marks)
+                        .build();
+
+                responses.add(response);
+            }
 
             log.info("Retrieved {} applications for vacancy", responses.size());
             return ResponseEntity.ok(responses);
 
         } catch (Exception e) {
-            log.error("Failed to fetch applications: {}", e.getMessage());
+            log.error("Failed to fetch applications: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to fetch applications: " + e.getMessage());
         }
     }
@@ -75,14 +119,14 @@ public class ApplicationController {
         try {
             log.info("GET /api/applications/{} - Fetching application", id);
 
-            Optional<ApplicationEntity> applicationOpt = applicationService.getApplicationById(id);
+            var applicationOpt = applicationService.getApplicationById(id);
 
-            if (!applicationOpt.isPresent()) {
+            if (applicationOpt.isEmpty()) {
                 log.warn("Application not found: {}", id);
                 return ResponseEntity.notFound().build();
             }
 
-            ApplicationResponse response = mapToResponse(applicationOpt.get());
+            var response = mapToResponse(applicationOpt.get());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -91,17 +135,22 @@ public class ApplicationController {
         }
     }
 
-    private ApplicationResponse mapToResponse(ApplicationEntity entity) {
-        ApplicationResponse response = new ApplicationResponse();
-        response.setId(entity.getId());
-        response.setVacancyId(entity.getVacancyId());
-        response.setCandidateName(entity.getCandidateName());
-        response.setEmail(entity.getEmail());
-        response.setCategory(entity.getCategory());
-        response.setAppHash(entity.getAppHash());
-        response.setStatus(entity.getStatus());
-        response.setBlockchainTxHash(entity.getBlockchainTxHash());
-        response.setCreatedAt(entity.getCreatedAt());
-        return response;
+    private ApplicationResponse mapToResponse(com.jobchain.entity.ApplicationEntity entity) {
+        Optional<ExamScoreEntity> scoreOpt = examScoreRepository.findByApplicationId(entity.getId());
+        Double marks = scoreOpt.map(ExamScoreEntity::getMarks).orElse(null);
+
+        return ApplicationResponse.builder()
+                .id(entity.getId())
+                .vacancyId(entity.getVacancyId())
+                .candidateName(entity.getCandidateName())
+                .email(entity.getEmail())
+                .category(entity.getCategory())
+                .appHash(entity.getAppHash())
+                .status(entity.getStatus())
+                .blockchainTxHash(entity.getBlockchainTxHash())
+                .createdAt(entity.getCreatedAt())
+                .marks(marks)
+                .testAttempted(entity.isTestAttempted())
+                .build();
     }
 }

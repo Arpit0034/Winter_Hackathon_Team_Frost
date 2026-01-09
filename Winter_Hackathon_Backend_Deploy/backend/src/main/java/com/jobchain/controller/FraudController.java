@@ -25,7 +25,6 @@ public class FraudController {
     @Autowired
     private FraudDetectionService fraudDetectionService;
 
-
     @PreAuthorize("hasAuthority('ADMIN')")
     @GetMapping("/{vacancyId}")
     public ResponseEntity<List<FraudAlertResponse>> getFraudAlerts(@PathVariable UUID vacancyId) {
@@ -33,26 +32,19 @@ public class FraudController {
 
             log.info("GET /api/fraud/{} - Fetching fraud alerts", vacancyId);
 
-
             List<FraudAlertEntity> alerts = fraudDetectionService.getFraudAlerts(vacancyId);
-
-
             List<FraudAlertResponse> responses = alerts.stream()
                     .map(this::mapToResponse)
                     .collect(Collectors.toList());
-
 
             if (responses.isEmpty()) {
                 log.info("✅ No fraud alerts found for vacancy");
             } else {
                 log.warn("🚨 Retrieved {} fraud alerts", responses.size());
             }
-
-            // Step 4: Return HTTP 200 OK with the list of fraud alerts
             return ResponseEntity.ok(responses);
 
         } catch (Exception e) {
-            // If anything goes wrong, log the error and throw runtime exception
             log.error("Failed to fetch fraud alerts: {}", e.getMessage());
             throw new RuntimeException("Failed to fetch fraud alerts: " + e.getMessage());
         }
@@ -63,7 +55,6 @@ public class FraudController {
     public ResponseEntity<List<FraudAlertEntity>> analyzeFraud(@RequestParam UUID vacancyId) {
         try {
             log.info("POST /api/fraud/analyze - Analyzing fraud for vacancy: {}", vacancyId);
-
             List<FraudAlertEntity> alerts = new ArrayList<>();
 
             log.info("Running paper leak detection...");
@@ -87,7 +78,6 @@ public class FraudController {
             } else {
                 log.error("🚨 Fraud analysis complete: {} total alerts generated", alerts.size());
             }
-
             return ResponseEntity.ok(alerts);
 
         } catch (Exception e) {
@@ -95,7 +85,6 @@ public class FraudController {
             throw new RuntimeException("Failed to analyze fraud: " + e.getMessage());
         }
     }
-
 
     private FraudAlertResponse mapToResponse(FraudAlertEntity entity) {
         FraudAlertResponse response = new FraudAlertResponse();

@@ -3,6 +3,7 @@ package com.jobchain.controller;
 import com.jobchain.dto.CreateVacancyRequest;
 import com.jobchain.dto.VacancyResponse;
 import com.jobchain.entity.VacancyEntity;
+import com.jobchain.repository.ExamScoreRepository;
 import com.jobchain.service.VacancyService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -32,17 +33,14 @@ public class VacancyController {
         try {
             log.info("POST /api/vacancies - Creating vacancy: {}", request.getTitle());
 
-            // Generate paper hash (in production, this would be hash of actual notification document)
-            String paperHash = "0".repeat(64); // Placeholder - replace with actual document hash
+            String paperHash = "0".repeat(64);
 
-            // Create vacancy via service
             VacancyEntity vacancy = vacancyService.createVacancy(
                     request.getTitle(),
                     request.getTotalPosts(),
                     paperHash
             );
 
-            // Map entity to response DTO
             VacancyResponse response = mapToResponse(vacancy);
 
             log.info("Vacancy created successfully: id={}", vacancy.getId());
