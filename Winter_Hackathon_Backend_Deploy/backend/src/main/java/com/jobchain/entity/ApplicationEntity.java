@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.UUID;
 
 @Data
@@ -58,4 +59,22 @@ public class ApplicationEntity {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    private boolean testAttempted = false;
+
+    @Column(columnDefinition = "TEXT")
+    private String omrAnswerJson;
+
+    private String answerHash;
+
+    @Column(name = "omr_verified")
+    private Boolean omrVerified = false;
+
+    @Column(name = "omr_blockchain_tx_hash")
+    private String omrBlockchainTxHash;
+
+    @Column(name = "omr_verified_at")
+    private Date omrVerifiedAt;
+
 }

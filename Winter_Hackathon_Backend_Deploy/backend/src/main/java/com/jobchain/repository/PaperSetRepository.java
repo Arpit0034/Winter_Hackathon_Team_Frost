@@ -10,10 +10,5 @@ import java.util.UUID;
 @Repository
 public interface PaperSetRepository extends JpaRepository<PaperSetEntity, UUID> {
 
-    /**
-     * Find all paper sets for a specific vacancy.
-     * @param vacancyId UUID of the vacancy
-     * @return List of paper sets for the vacancy
-     */
     List<PaperSetEntity> findByVacancyId(UUID vacancyId);
 }

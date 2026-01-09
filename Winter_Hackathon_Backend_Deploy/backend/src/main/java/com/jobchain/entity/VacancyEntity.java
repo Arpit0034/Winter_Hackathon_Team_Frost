@@ -19,6 +19,9 @@ public class VacancyEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
+    @Column(nullable = false, unique = true)
+    private Long blockchainVacancyId;
+
     @Column(name = "title", nullable = false, length = 500)
     private String title;
 

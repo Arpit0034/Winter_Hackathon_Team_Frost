@@ -10,10 +10,5 @@ import java.util.UUID;
 @Repository
 public interface FraudAlertRepository extends JpaRepository<FraudAlertEntity, UUID> {
 
-    /**
-     * Find all fraud alerts for a specific vacancy.
-     * @param vacancyId UUID of the vacancy
-     * @return List of fraud alerts for the vacancy
-     */
     List<FraudAlertEntity> findByVacancyId(UUID vacancyId);
 }

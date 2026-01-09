@@ -13,11 +13,6 @@ import java.util.UUID;
 @Repository
 public interface ExamScoreRepository extends JpaRepository<ExamScoreEntity, UUID> {
 
-    /**
-     * Find exam score by application ID.
-     * @param applicationId UUID of the application
-     * @return Optional containing ExamScoreEntity if found
-     */
     Optional<ExamScoreEntity> findByApplicationId(UUID applicationId);
 
     @Query("""
@@ -43,5 +38,6 @@ public interface ExamScoreRepository extends JpaRepository<ExamScoreEntity, UUID
             @Param("vacancyId") UUID vacancyId
     );
 
+    boolean existsByApplicationId(UUID applicationId);
 
 }
