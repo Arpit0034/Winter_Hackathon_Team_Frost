@@ -15,6 +15,8 @@ export const Application = {
   status: "",
   blockchainTxHash: "",
   createdAt: "",
+  testAttempted: false,
+  examScore: false,
 };
 export const ExamScore = {
   id: "",
@@ -59,7 +61,13 @@ export const CreateApplicationRequest = {
   marks10: 0,
   marks12: 0,
 };
-export const RecordExamScoreRequest = { applicationId: "", marks: 0 };
+export const RecordExamScoreRequest = {
+  vacancyId: "",
+  applicationId: "",
+  marks: 0,
+  markingJson: "",
+};
+
 export const PublishMeritResponse = {
   vacancyId: "",
   meritList: [],
