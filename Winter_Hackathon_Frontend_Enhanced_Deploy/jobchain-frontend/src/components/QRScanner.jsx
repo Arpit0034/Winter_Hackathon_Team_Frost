@@ -82,6 +82,7 @@ export default function QRScanner({ onScanSuccess, onClose }) {
     }
   };
 
+  // Handle responsive scanner size
   const getScannerSize = () => {
     const isMobile = window.innerWidth < 768;
     const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
@@ -766,8 +767,7 @@ export default function QRScanner({ onScanSuccess, onClose }) {
         </ScrollArea>
       </Card>
 
-      {/* Add custom animations */}
-      <style jsx>{`
+      <style>{`
         @keyframes scan-horizontal {
           0% {
             transform: translateX(-100%);
