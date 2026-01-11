@@ -11,27 +11,40 @@
 
 ## 📌 Contribution
 
-### 👨‍💻 Team Leader  
-**Arpit Kandari**  
-- Frontend & Backend Development  
+### 👨‍💻 Team Leader - Arpit Kandari
+**Role:** Full-Stack Architecture & Integration
 
-### 👨‍💻 Team Member 1  
-**Lokesh Jaggi**  
-- Setup Polygon Amoy Testnet  
-- Connect Metamask to Polygon Amoy Testnet  
-- Deploy Smart Contract on Remix  
-- Generate JobChain contract using Web3j CLI  
+**Contributions:**
+- **Frontend & Backend Integration**: Built and connected React components with Spring Boot REST APIs, handling state management and API authentication 
+- **Project Coordination**: Integrated contributions from all team members, resolved dependency conflicts between blockchain and backend services
 
-### 👨‍💻 Team Member 2  
-**Manu Pathak**  
-- Add Blockchain configuration  
-- Fix Controllers, Services, Entities, and Repositories code  
+### 👨‍💻 Team Member 1 - Lokesh Jaggi
+**Role:** Blockchain Infrastructure & Smart Contract Deployment
 
-### 👨‍💻 Team Member 3  
-**Anuj Bisht**  
-- Add `ExamStart.jsx` and `OmrSheet.jsx` components  
-- Fix `publicMerit` logic  
-- Update `client.js` etc
+**Contributions:**
+- **Polygon Amoy Testnet Setup & Configuration**: Configured network parameters and gas settings, enabling team to test smart contracts without mainnet costs
+- **MetaMask Integration**: Developed wallet connection flow with proper account validation (~120 lines of Web3.js code)
+- **Smart Contract Deployment**: Deployed JobChain smart contract to Polygon Amoy using Remix
+- **Web3j CLI Integration**: Generated Java bindings for smart contracts, reducing manual contract interaction code 
+
+### 👨‍💻 Team Member 2 - Manu Pathak
+**Role:** Backend Development & Blockchain Integration
+
+**Contributions:**
+- **Blockchain Configuration Module**: Implemented Web3j configuration beans, contract instance management, and transaction signing 
+- **Smart Contract Integration**: Built Controllers and Services for blockchain operations 
+- **Data Layer Refactoring**: Redesigned Entities and Repositories to support blockchain transaction states and audit trails 
+- **Error Handling**: Implemented exception handling for contract calls and network failures
+
+### 👨‍💻 Team Member 3 - Anuj Bisht
+**Role:** Frontend UI/UX & Business Logic
+
+**Contributions:**
+- **ExamStart.jsx Component**: Built exam initiation interface 
+- **OmrSheet.jsx Component**: Developed OMR sheet interface
+- **publicMerit Logic Fix**: Debugged and rewrote merit 
+- **client.js Enhancement**: Updated API client 
+
 ---
 
 ## Updated DFD 
